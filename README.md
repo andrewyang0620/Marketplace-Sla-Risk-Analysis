@@ -8,12 +8,12 @@
 
 
 ## Executive Summary
-- **Concentrated Risk:** Analysis reveals that the top `5%` of high-risk sellers are responsible for `over 45%` of total platform SLA violations.
+<!-- - **Concentrated Risk:** Analysis reveals that the top `5%` of high-risk sellers are responsible for `over 45%` of total platform SLA violations.
 - **Impact:** `SLA breaches` are the #1 driver of negative sentiment; orders with `>3` days delay show a `60%` drop in `30-day` repeat purchase probability and a `2.4x` increase in cancellation rates.
 
 - **Predictive Signals:** `80% of` severe failures are preceded by `"micro-delay"` patterns in seller processing time within a `14-day` lookback window.
 
-- **Strategic Trade-off:** Implementing a tiered intervention strategy can reduce platform-wide delays by `20%` while risking less than `2%` of total GMV, optimizing the long-term LTV/GMV balance.
+- **Strategic Trade-off:** Implementing a tiered intervention strategy can reduce platform-wide delays by `20%` while risking less than `2%` of total GMV, optimizing the long-term LTV/GMV balance. -->
 
 
 ## 1. Project Motivation
