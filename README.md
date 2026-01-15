@@ -49,3 +49,9 @@ The challenge is not whether poor-performing sellers exist, but whether their ri
  5. Attribution: Seller Performance vs. Logistics Infrastructure
 
     *Why it matters:* Understanding the root causes of SLA violations helps in designing targeted interventions, whether they involve seller training or logistics improvements.
+
+## 3. Data Source and Scope
+### Data Source
+- **Brazilian E-Commerce Public Dataset** by Olist
+
+
