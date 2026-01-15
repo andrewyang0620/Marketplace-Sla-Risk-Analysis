@@ -3,7 +3,7 @@
 ![Business Analytics](https://img.shields.io/badge/Business-Analytics-blue)
 ![Python](https://img.shields.io/badge/Python-3.13.5-green)
 ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+<!-- ![License](https://img.shields.io/badge/License-MIT-yellow) -->
 ![Status](https://img.shields.io/badge/Status-In--Progress-orange)
 
 
