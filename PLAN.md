@@ -33,9 +33,9 @@ The project is driven by the following core hypotheses:
 
 **H1:** SLA violations are highly concentrated among a small subset of sellers. 
 
-**H2:** SLA violations causally lead to decreased customer experience and retention.
+**H2:** SLA violations causally lead to decreased customer experience and retention, and the magnitude of harm increases with delay severity.
 
-**H3:** Severe SLA failures are preceded by detectable early warning signals.
+**H3:** Severe SLA failures are preceded by detectable early warning signals with sufficient lead time to allow operational intervention.
 
 **H4:** Targeted seller intervention can improve reliability with positive ROI (return on investment).
 
@@ -65,7 +65,8 @@ All the analysis in the project will be designed to validate or invalidate these
 - Missing value patterns analysis
 - seller-order linkage verification
   
-## Metric Design
+## 5. Metric Design
+
 Metrics are designed to be:
 - Interpretable by non-technical based audiences
 - Actionable for business decisions at seller level
@@ -79,3 +80,128 @@ Metrics are designed to be:
 
 Thresholds will be tested through sensitivity analysis.
 
+### Guardrail Metrics (to prevent over-optimization)
+
+To avoid improving SLA at the expense of marketplace health, we define guardrail metrics that must not deteriorate materially:
+
+- Total GMV and order volume
+- GMV share from small/long-tail sellers
+- New seller activation or onboarding volume (if applicable)
+
+Intervention strategies will be evaluated not only on SLA and CX improvements, but also on their impact on these guardrail metrics.
+
+## 6. Seller Risk Identification Plan
+
+### Objective
+Identify sellers whose operational behaviour creates SLA risks
+
+### Steps
+1. Aggregate seller-level operational metrics
+2. Rank sellers based on the magnitude and frequency of SLA violations
+3. Conduct concentration analysis, such as Pareto analysis or Lorenz curve
+4. Define preliminary risk tiers
+
+### Validation
+- Stability of ranking accross time wondows
+- Sensitivity to SLA threshold definitions
+
+## 7. Customer Impact Vaildation Plan
+
+### Objective
+Demonstrate that SLA violations cause customer harm, and that the severity of harm increases proportionally with delay length.
+
+### Evidence Strategy
+
+**Level 1: Descriptive Signosts**
+- Compare the customer experience metrics between on-time and delayed orders.
+
+**Level 2 - Match Comparison**
+- Match sellers/orders on category, price range, geography, and order volume.
+- Compare outcomes between high/low risk sellers under matched conditions.
+
+**Level 3 - Within-Seller Analysis**
+- Track sellers before and after their 1st major SLA violation.
+- Masure changes in review scores, repeat purchase rates, and cancellation rates.
+
+**Level 4 - Dose-Response Analysis**
+- Bucket delays by severity, in days range
+- Validate monotonic or near-linear degradation in:
+  - Review score
+  - Cancellation rate
+  - 30-day repeat purchase probability
+
+**Level 5 — Threshold Discovery**
+
+Beyond the general dose–response pattern, we will search for potential "cliff points" in delay severity, where customer harm accelerates disproportionately (e.g., repeat purchase drops sharply after 3 more days delay).
+
+This helps inform policy-making such as:
+- SLA promises
+- Compensation rules for severe delays
+- Internal alert thresholds for operations escalation
+
+## 8. Predictability & Lead-time Validation Plan
+
+### Objective
+Assess whether high-risk sellers can be flagged with sufficient lead-time to enable operational intervention
+
+### Early Warning Signals
+- Rolling delay rates
+- Short term vaildation spikes
+- Seller tenure and trends
+- Geographic logistics contrains
+
+### Lead-time Evaluation
+- Define a severe SLA event, such as delay exceeding threshold
+- Evaluate model performance at different lead times:
+  - 7-day warning window
+  - 14-day ...
+  - 21-day ...
+
+### Success Criteria
+- Capture rate of severe failures at each lead time
+- False positive rate acceptable for ops teams
+- Minimum actionable lead time >= 1–2 weeks
+
+
+## 9. Risk Segementation & Root Cause Analysis
+
+### Purpose
+Distinguish between:
+- Seller behavioral issues
+- Structural logistics issues
+
+### Dimensions
+- Gerography
+- Category
+- Seller maturity
+- Carrier dependence
+
+## 10. Financial Impact & ROI Framework (Concise)
+
+### Objective
+Translate SLA reliability improvements into economic impact and evaluate whether interventions on high-risk sellers create positive ROI.
+
+### What will be estimated
+- Cost of SLA violations:
+  - Cancelled orders & wasted acquisition cost
+  - Conversion loss from review score drops
+  - Lost repeat purchases as an LTV proxy
+- Cost of interventions:
+  - GMV at risk when restricting high-risk sellers
+  - Any additional operational effort
+
+### Scenarios
+- Baseline: No intervention, current SLA / CX / GMV.
+- Scenario A: Restrict / remove bottom X% high-risk sellers.
+- Scenario B: Tiered actions by risk tier (suspend / warn / monitor)
+
+For each scenario I will estimate:
+- SLA violations prevented
+- Customer experience uplift
+- GMV at risk
+- Net benefit = avoided SLA cost – intervention cost
+
+### Robustness Check
+Key assumptions, such as cost per cancellation, conversion loss per cancellation, will be varied under conservative / base / aggressive settings.
+
+An intervention is considered viable only if ROI stays positive under conservative assumptions.
