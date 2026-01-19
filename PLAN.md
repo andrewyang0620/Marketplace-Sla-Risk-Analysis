@@ -5,7 +5,8 @@
 
 
 ## 0. Purpose of This Plan
-This document defData Integrity Checksines the excutive plan, vaildation strategy, and core logic for decision making in this project.
+
+This document defines the execution plan, validation strategy, and core decision logic for this project.
 
 The goal is to ensure the following:
 - Every analysis step is linked to a concrete business question
@@ -82,7 +83,7 @@ Thresholds will be tested through sensitivity analysis.
 
 ### Guardrail Metrics (to prevent over-optimization)
 
-To avoid improving SLA at the expense of marketplace health, we define guardrail metrics that must not deteriorate materially:
+To avoid improving SLA at the expense of marketplace health, I define guardrail metrics that must not deteriorate materially:
 
 - Total GMV and order volume
 - GMV share from small/long-tail sellers
@@ -132,7 +133,7 @@ Demonstrate that SLA violations cause customer harm, and that the severity of ha
 
 **Level 5 — Threshold Discovery**
 
-Beyond the general dose–response pattern, we will search for potential "cliff points" in delay severity, where customer harm accelerates disproportionately (e.g., repeat purchase drops sharply after 3 more days delay).
+Beyond the general dose–response pattern, I will search for potential "cliff points" in delay severity, where customer harm accelerates disproportionately (e.g., repeat purchase drops sharply after 3 more days delay).
 
 This helps inform policy-making such as:
 - SLA promises
@@ -146,9 +147,9 @@ Assess whether high-risk sellers can be flagged with sufficient lead-time to ena
 
 ### Early Warning Signals
 - Rolling delay rates
-- Short term vaildation spikes
+- Short term validation spikes
 - Seller tenure and trends
-- Geographic logistics contrains
+- Geographic logistics constraints
 
 ### Lead-time Evaluation
 - Define a severe SLA event, such as delay exceeding threshold
@@ -205,3 +206,55 @@ For each scenario I will estimate:
 Key assumptions, such as cost per cancellation, conversion loss per cancellation, will be varied under conservative / base / aggressive settings.
 
 An intervention is considered viable only if ROI stays positive under conservative assumptions.
+
+## 11. Counterfactual & Trade-off Simulation
+### Baseline
+Observed outcomes with no intervention
+
+### Simulated Interventions
+- Remove or throttle high-risk sellers
+- Recompute SLA and experience metrics
+
+### Output
+Define the trade-off frontier between:
+- Growth (GMV)
+- Reliability
+- Customer experience
+
+## 12. Decision Framework Design
+
+### Risk Tiering
+Define seller tiers with:
+- Entry criteria
+- Recommended actions
+- Expected cost vs benefit
+
+### Deliverable
+A policy-ready framework usable by operations teams.
+
+
+## 13. Deliverables
+
+- README.md
+- PLAN.md (this doc)
+- Modular notebooks (analysis execution)
+- Reusable Python modules
+- Executive summary
+
+## 14. Risks & Mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Correlation mistaken for causation | Multi-layer validation |
+| Over-precise ROI claims | Conservative assumptions |
+| Overfitting risk signals | Temporal validation |
+| Excessive complexity | Interpretability-first design |
+
+## 15. Definition of Success
+
+This project is successful if:
+- SLA risk concentration is empirically demonstrated
+- Customer harm shows a consistent dose–response relationship
+- High-risk sellers can be flagged with >= 14 days lead time
+- ROI conclusions remain positive under conservative assumptions
+- Results can support a defensible operational decision
