@@ -27,12 +27,16 @@ venv/
 # =========================
 # Data files (IMPORTANT)
 # =========================
-data/raw/
-data/interim/
-data/external/
+# Ignore all data files
+data/raw/*
+data/interim/*
+data/external/*
 
-# Keep sample or schema files
+# But keep README files
 !data/README.md
+!data/raw/README.md
+!data/interim/README.md
+!data/external/README.md
 !data/sample/
 !data/sample/**
 
