@@ -12,4 +12,4 @@ The raw data from the [Brazilian E-Commerce Public Dataset by Olist](https://www
 - `olist_sellers_dataset.csv`: Information about sellers
 - `product_category_name_translation.csv`: Translation from Portuguese to English
 
-The raw data is stored in the `data/olist_ecommerce` directory locally, which will not be uploaded to Github.
+The raw data is stored in the `data/raw` directory locally, which will not be uploaded to Github.
