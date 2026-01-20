@@ -28,6 +28,7 @@ venv/
 # Data files
 # =========================
 data/raw/*
+data/processed/*
 data/interim/*
 data/external/*
 
