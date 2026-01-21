@@ -39,7 +39,7 @@ def validate_foreign_keys(relations, min_match=1.0):
         ok = match_rate >= min_match
         status = "PASSED" if ok else "FAILED"
         print(
-            f"[FK {status}] {name}: "
+            f"[FK {status}]: "
             f"{match_rate:.4%} of non-null {child_col} values found in {parent_col} "
             f"({in_parent.sum()}/{n_total})"
         )
@@ -50,9 +50,15 @@ def validate_foreign_keys(relations, min_match=1.0):
     print("\nOverall FK check:", "ALL PASSED" if all_ok else "SOME FAILED")
     return all_ok
 
-def validate_time_logic():
-    pass
 
+def validate_time_logic(table, time1, time2):
+    tlc = table[time2] < table[time1]
+    m = tlc.mean()
+    s = tlc.sum()
+    if m == 0.0 and s == 0:
+        return print(f"[PASSED]: All records have {time2} >= {time1}")
+    else:
+        return print(f"[FAILED]: {s} records have {time2} < {time1} {m:.4%} violation rate")
 
 def run_comprehensive_validation():
     pass
