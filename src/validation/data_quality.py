@@ -59,6 +59,3 @@ def validate_time_logic(table, time1, time2):
         return print(f"[PASSED]: All records have {time2} >= {time1}")
     else:
         return print(f"[FAILED]: {s} records have {time2} < {time1} {m:.4%} violation rate")
-
-def run_comprehensive_validation():
-    pass
