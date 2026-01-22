@@ -1,6 +1,6 @@
 # /src/features/sla_metrics.py
 import pandas as pd
-from src.config import SLA_THRESHOLDS
+from config import SLA_THRESHOLDS
 
 def calculate_delay_days(orders: pd.DataFrame) -> pd.DataFrame:
     """Calculate the delay in days between the actual delivery date and the estimated delivery date.
