@@ -64,5 +64,36 @@ def classify_delay_severity(orders: pd.DataFrame, delay_col: str = "delay_days",
 
     return df
 
-def get_sla_summary():
-    pass
+def get_sla_summary(orders: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate a summary DataFrame with counts and rates of SLA violations.
+    Args:
+        orders (pd.DataFrame): DataFrame containing order information with SLA violation flags.
+    Returns:
+        pd.DataFrame: Summary DataFrame with counts and rates of SLA violations.
+    """
+    delivered = orders["order_delivered_customer_date"].notna()
+
+    sla_violations = orders.loc[delivered, "is_sla_violation"]
+    severe_violations = orders.loc[delivered, "is_severe_violation"]
+
+    summary = pd.DataFrame({
+        "Metric": [
+            "Orders with any delay (SLA violation)",
+            f"Orders with severe delay (>{SLA_THRESHOLDS['severe_delay']} days)",
+        ],
+        "Count": [
+            sla_violations.sum(),
+            severe_violations.sum(),
+        ],
+        "Rate (of delivered)": [
+            sla_violations.mean(),
+            severe_violations.mean(),
+        ],
+    })
+    summary["Count"] = summary["Count"].map(lambda x: f"{x:,}")
+    summary["Rate (of delivered)"] = summary["Rate (of delivered)"].map(
+        lambda x: f"{x:.2%}"
+    )
+
+    return summary
