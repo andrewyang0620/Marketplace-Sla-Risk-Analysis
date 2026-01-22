@@ -3,16 +3,25 @@ import pandas as pd
 from src.config import SLA_THRESHOLDS
 
 def calculate_delay_days(orders: pd.DataFrame) -> pd.DataFrame:
+    """Calculate the delay in days between the actual delivery date and the estimated delivery date.
+
+    Args:
+        orders (pd.DataFrame): DataFrame containing order information with delivery dates.
+
+    Returns:
+        pd.DataFrame: DataFrame with an additional column "delay_days" representing the delay in days.
+    """
     df = orders.copy()
 
     mask = df["order_delivered_customer_date"].notna() & df["order_estimated_delivery_date"].notna()
 
+    # delay calculation
     df.loc[mask, "delay_days"] = (
         df.loc[mask, "order_delivered_customer_date"]- df.loc[mask, "order_estimated_delivery_date"]
     ).dt.days
-
+    
     df.loc[~mask, "delay_days"] = pd.NA
-
+    # return updated dataframe with delay_days column
     return df
 
 def add_sla_violation_flags(orders: pd.DataFrame) -> pd.DataFrame:
@@ -32,8 +41,28 @@ def add_sla_violation_flags(orders: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def classify_delay_severity():
-    pass
+def classify_delay_severity(orders: pd.DataFrame, delay_col: str = "delay_days", out_col: str = "delay_severity") -> pd.DataFrame:
+    """
+    Use SLA_THRESHOLDS to categorize delay severity into bins:
+
+      early        : delay < 0
+      on_time      : delay == 0
+      delay_1_7    : 1 <= delay <= severe_delay
+      delay_8_30   : severe_delay+1 <= delay <= extreme_delay
+      delay_gt_30  : delay > extreme_delay
+    """
+    df = orders.copy()
+    s = df[delay_col]
+
+    severe = SLA_THRESHOLDS["severe_delay"]      # 7
+    extreme = SLA_THRESHOLDS["extreme_delay"]    # 30
+
+    bins = [-float("inf"), -1, 0, severe, extreme, float("inf")]
+    labels = ["early", "on_time", "delay_1_7", "delay_8_30", "delay_gt_30"]
+
+    df[out_col] = pd.cut(s, bins=bins, labels=labels)
+
+    return df
 
 def get_sla_summary():
     pass

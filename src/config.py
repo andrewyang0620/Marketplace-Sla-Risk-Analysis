@@ -11,7 +11,6 @@ DATA_PROCESSED = DATA_DIR / "processed"
 # SLA Business Rules
 SLA_THRESHOLDS = {
     'any_delay': 0,
-    'moderate_delay': 7,
     'severe_delay': 7,
     'extreme_delay': 30,
 }
