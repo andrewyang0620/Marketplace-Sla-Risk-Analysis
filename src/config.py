@@ -16,6 +16,7 @@ SLA_THRESHOLDS = {
 }
 
 # Data validation thresholds
+# The following threshold are to confirm data quality expectations
 DATA_QUALITY_THRESHOLDS = {
     'min_delivery_rate': 0.95,
     'max_missing_seller': 0.01,

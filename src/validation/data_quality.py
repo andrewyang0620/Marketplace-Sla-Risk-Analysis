@@ -1,5 +1,6 @@
 # src/validation/data_quality.py
 import pandas as pd
+from config import DATA_QUALITY_THRESHOLDS
 
 def validate_primary_keys(tables: dict) -> bool:
     """Validate primary keys for given tables.
@@ -115,3 +116,20 @@ def compute_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame) -> floa
 
     return n_delivered_with_review / n_delivered
 
+def validate_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame, min_required: float | None = None) -> float:
+    """
+    Validate that the proportion of delivered orders with valid reviews meets the minimum required threshold.
+    """
+    if min_required is None:
+        min_required = DATA_QUALITY_THRESHOLDS.get("min_review_coverage", 0.0)
+
+    coverage = compute_review_coverage(orders, reviews)
+
+    status = "PASSED" if coverage >= min_required else "FAILED"
+    print(
+        f"[REVIEW_COVERAGE {status}] "
+        f"Delivered orders with valid review score: {coverage:.2%} "
+        f"(min required: {min_required:.2%})"
+    )
+
+    return coverage
