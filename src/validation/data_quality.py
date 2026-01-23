@@ -85,3 +85,33 @@ def validate_time_logic(table, time1, time2):
         return print(f"[PASSED]: All records have {time2} >= {time1}")
     else:
         return print(f"[FAILED]: {s} records have {time2} < {time1} {m:.4%} violation rate")
+    
+def compute_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame) -> float:
+    """
+    Compute the proportion of delivered orders that have valid customer reviews.
+    Args:
+        orders (pd.DataFrame): DataFrame containing order information.
+        reviews (pd.DataFrame): DataFrame containing review information.
+    Returns:
+        float: Proportion of delivered orders with valid reviews.
+    """
+    delivered_orders = orders[orders["order_status"] == "delivered"].copy()
+    n_delivered = delivered_orders["order_id"].nunique()
+
+    valid_reviews = reviews[
+        reviews["review_score"].between(1, 5) & reviews["review_score"].notna()
+    ].copy()
+
+    delivered_with_reviews = delivered_orders[["order_id"]].merge(
+        valid_reviews[["order_id", "review_score"]],
+        on="order_id",
+        how="inner",
+    )
+
+    n_delivered_with_review = delivered_with_reviews["order_id"].nunique()
+
+    if n_delivered == 0:
+        return 0.0
+
+    return n_delivered_with_review / n_delivered
+
