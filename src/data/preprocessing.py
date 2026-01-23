@@ -14,6 +14,13 @@ def sellect_primary_seller(items: pd.DataFrame, primary_item_id: int = 1) -> pd.
 def build_orders_sellers(orders: pd.DataFrame, items: pd.DataFrame, primary_item_id: int = 1, cols_keep: list[str] | None = None) -> pd.DataFrame:
     """
     Build a DataFrame that links orders with their primary sellers.
+    Args:
+        orders (pd.DataFrame): DataFrame containing order information.
+        items (pd.DataFrame): DataFrame containing order item information.
+        primary_item_id (int, optional): The order_item_id to consider as primary. Defaults to 1.
+        cols_keep (list[str] | None, optional): List of columns to keep in the final DataFrame. If None, keep all columns. Defaults to None.
+    Returns:
+        pd.DataFrame: DataFrame linking orders with their primary sellers.
     """
     items_main = sellect_primary_seller(items, primary_item_id=primary_item_id)
 

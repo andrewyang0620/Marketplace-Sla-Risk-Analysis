@@ -133,3 +133,32 @@ def validate_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame, min_re
     )
 
     return coverage
+
+def validate_missing_sellers(orders_sellers: pd.DataFrame) -> None:
+    """
+    Validate and report the proportion of orders without assigned sellers.
+    """
+    missing = orders_sellers["seller_id"].isna()
+    n_missing = missing.sum()
+    rate_missing = missing.mean()
+
+    print("\n=== Missing Seller Assignment Overview ===")
+    print(
+        f"Orders without seller assignment: "
+        f"{n_missing:,} ({rate_missing:.4%})"
+    )
+
+    if n_missing > 0:
+        print("\nMissing seller by order_status:")
+        print(
+            orders_sellers.loc[missing, "order_status"].value_counts()
+        )
+
+def validate_missing_by_column(df: pd.DataFrame, name: str = "df") -> None:
+    """
+    Print the proportion of missing values for each column in the DataFrame.
+    """
+    print(f"\n=== Missing values per column: {name} ===")
+    for col in df.columns:
+        missing_pct = df[col].isna().mean()
+        print(f"  {col}: {missing_pct:.2%}")
