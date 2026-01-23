@@ -31,14 +31,18 @@ def validate_primary_keys(tables: dict) -> bool:
     return all_ok
 
 
-def validate_foreign_keys(relations, min_match=1.0):
+def validate_foreign_keys(relations: list[tuple[str, pd.DataFrame, str, pd.DataFrame, str]], min_match: float = 1.0) -> bool:
     """Validate foreign key relationships.
 
     Args:
-        relations (list): List of tuples containing (name, child_df, child_col, parent_df, parent_col)
-        min_match (float, optional): Minimum match rate to consider the validation passed. Defaults to 1.0.
+        relations: List of tuples containing (name, child_df, child_col, parent_df, parent_col)
+        min_match: Minimum match rate to consider the validation passed. Defaults to 1.0.
+        
     Returns:
-        bool: True if all foreign key validations pass, False otherwise.
+        True if all foreign key validations pass, False otherwise.
+        
+    Raises:
+        KeyError: If specified columns do not exist in DataFrames.
     """
     all_ok = True
 
@@ -68,34 +72,59 @@ def validate_foreign_keys(relations, min_match=1.0):
     return all_ok
 
 
-def validate_time_logic(table, time1, time2):
+def validate_time_logic(table: pd.DataFrame, time1: str, time2: str) -> bool:
     """Validate logical order of two time columns in a table.
 
     Args:
-        table (pd.DataFrame): DataFrame containing the time columns.
-        time1 (str): Name of the first time column.
-        time2 (str): Name of the second time column.
+        table: DataFrame containing the time columns.
+        time1: Name of the first time column.
+        time2: Name of the second time column.
 
     Returns:
-        bool: True if all records have time2 >= time1, False otherwise.
+        True if all records have time2 >= time1, False otherwise.
+        
+    Raises:
+        KeyError: If specified columns do not exist in the DataFrame.
     """
+    if time1 not in table.columns:
+        raise KeyError(f"Column '{time1}' not found in DataFrame")
+    if time2 not in table.columns:
+        raise KeyError(f"Column '{time2}' not found in DataFrame")
+        
     tlc = table[time2] < table[time1]
     m = tlc.mean()
     s = tlc.sum()
+    
     if m == 0.0 and s == 0:
-        return print(f"[PASSED]: All records have {time2} >= {time1}")
+        print(f"[PASSED]: All records have {time2} >= {time1}")
+        return True
     else:
-        return print(f"[FAILED]: {s} records have {time2} < {time1} {m:.4%} violation rate")
+        print(f"[FAILED]: {s} records have {time2} < {time1} {m:.4%} violation rate")
+        return False
     
 def compute_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame) -> float:
-    """
-    Compute the proportion of delivered orders that have valid customer reviews.
+    """Compute the proportion of delivered orders that have valid customer reviews.
+    
     Args:
-        orders (pd.DataFrame): DataFrame containing order information.
-        reviews (pd.DataFrame): DataFrame containing review information.
+        orders: DataFrame containing order information with 'order_status' and 'order_id' columns.
+        reviews: DataFrame containing review information with 'review_score' and 'order_id' columns.
+        
     Returns:
-        float: Proportion of delivered orders with valid reviews.
+        Proportion of delivered orders with valid reviews (between 0.0 and 1.0).
+        
+    Raises:
+        KeyError: If required columns are missing from DataFrames.
     """
+    required_order_cols = ["order_status", "order_id"]
+    required_review_cols = ["review_score", "order_id"]
+    
+    for col in required_order_cols:
+        if col not in orders.columns:
+            raise KeyError(f"Column '{col}' not found in orders DataFrame")
+    for col in required_review_cols:
+        if col not in reviews.columns:
+            raise KeyError(f"Column '{col}' not found in reviews DataFrame")
+    
     delivered_orders = orders[orders["order_status"] == "delivered"].copy()
     n_delivered = delivered_orders["order_id"].nunique()
 
@@ -117,8 +146,15 @@ def compute_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame) -> floa
     return n_delivered_with_review / n_delivered
 
 def validate_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame, min_required: float | None = None) -> float:
-    """
-    Validate that the proportion of delivered orders with valid reviews meets the minimum required threshold.
+    """Validate that the proportion of delivered orders with valid reviews meets the minimum required threshold.
+    
+    Args:
+        orders: DataFrame containing order information.
+        reviews: DataFrame containing review information.
+        min_required: Minimum required coverage rate. If None, uses DATA_QUALITY_THRESHOLDS['min_review_coverage'].
+        
+    Returns:
+        Actual review coverage rate as a float between 0.0 and 1.0.
     """
     if min_required is None:
         min_required = DATA_QUALITY_THRESHOLDS.get("min_review_coverage", 0.0)
@@ -135,9 +171,17 @@ def validate_review_coverage(orders: pd.DataFrame, reviews: pd.DataFrame, min_re
     return coverage
 
 def validate_missing_sellers(orders_sellers: pd.DataFrame) -> None:
+    """Validate and report the proportion of orders without assigned sellers.
+    
+    Args:
+        orders_sellers: DataFrame containing order-seller linkage with 'seller_id' and 'order_status' columns.
+        
+    Raises:
+        KeyError: If 'seller_id' column is missing from the DataFrame.
     """
-    Validate and report the proportion of orders without assigned sellers.
-    """
+    if "seller_id" not in orders_sellers.columns:
+        raise KeyError("Column 'seller_id' not found in orders_sellers DataFrame")
+    
     missing = orders_sellers["seller_id"].isna()
     n_missing = missing.sum()
     rate_missing = missing.mean()
@@ -155,8 +199,11 @@ def validate_missing_sellers(orders_sellers: pd.DataFrame) -> None:
         )
 
 def validate_missing_by_column(df: pd.DataFrame, name: str = "df") -> None:
-    """
-    Print the proportion of missing values for each column in the DataFrame.
+    """Print the proportion of missing values for each column in the DataFrame.
+    
+    Args:
+        df: DataFrame to analyze for missing values.
+        name: Display name for the DataFrame in output messages. Defaults to 'df'.
     """
     print(f"\n=== Missing values per column: {name} ===")
     for col in df.columns:
