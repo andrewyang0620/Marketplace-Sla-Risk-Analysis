@@ -1,6 +1,11 @@
 # src/data/preprocessing.py
 import pandas as pd
-from src.config import DATA_PROCESSED
+
+# Flexible import to support both notebook and direct script execution
+try:
+    from config import DATA_PROCESSED
+except ImportError:
+    from src.config import DATA_PROCESSED
 
 def select_primary_seller(items: pd.DataFrame, primary_item_id: int = 1) -> pd.DataFrame:
     """Select the primary seller for each order based on the order_item_id.
