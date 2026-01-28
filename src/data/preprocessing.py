@@ -1,5 +1,6 @@
 # src/data/preprocessing.py
 import pandas as pd
+from src.config import DATA_PROCESSED
 
 def select_primary_seller(items: pd.DataFrame, primary_item_id: int = 1) -> pd.DataFrame:
     """Select the primary seller for each order based on the order_item_id.
@@ -61,3 +62,8 @@ def build_orders_sellers(orders: pd.DataFrame, items: pd.DataFrame, primary_item
         df = df[cols_keep]
 
     return df
+
+def load_orders_sellers():
+    return pd.read_csv(DATA_PROCESSED / "orders_sellers.csv",
+    parse_dates=['order_purchase_timestamp', 'order_delivered_customer_date', 'order_estimated_delivery_date']
+)
