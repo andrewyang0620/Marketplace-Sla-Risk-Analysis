@@ -207,3 +207,85 @@ def compute_seller_sla_metrics(
 
     metrics = metrics.reset_index().rename(columns={"index": "seller_id"})
     return metrics
+
+def rank_sellers_by_sla_risk(
+    seller_metrics: pd.DataFrame,
+    *,
+    min_delivered_orders: int = 10,
+    risk_weights: Optional[Dict[str, float]] = None,
+) -> pd.DataFrame:
+    """Rank sellers by SLA risk and calculate risk_score based on SLA metrics.
+
+    Current version uses only SLA dimensions:
+      - violation_rate
+      - severity_weighted_violations
+
+    Steps:
+      1. Filter out sellers with delivered_orders < min_delivered_orders (small sample noise).
+      2. Calculate quantile rank (0~1) for each feature, treating missing values as 0.
+      3. Compute risk_score as weighted sum based on risk_weights.
+      4. Sort by risk_score in descending order.
+      5. Calculate:
+         - cum_violation_share
+         - cum_severity_share
+         - seller_rank, seller_rank_share
+    """
+    df = seller_metrics.copy()
+
+    df = df[df["delivered_orders"] >= min_delivered_orders].copy()
+    if df.empty:
+        logger.warning("No sellers left after applying min_delivered_orders filter.")
+        df["risk_score"] = []
+        return df
+
+    # Default weights - pure SLA perspective
+    if risk_weights is None:
+        risk_weights = {
+            "violation_rate": 0.5,
+            "severity_weighted_violations": 0.5,
+        }
+
+    def pct_rank(series: pd.Series) -> pd.Series:
+        """Percentile rank, returns 0 if all values are missing."""
+        if series.notna().sum() == 0:
+            return pd.Series(0.0, index=series.index)
+        return series.rank(pct=True)
+
+    # Build rank features
+    rank_features = {}
+    for feature in risk_weights.keys():
+        if feature not in df.columns:
+            raise ValueError(f"Feature '{feature}' not found in seller_metrics.")
+        rank_features[feature] = pct_rank(df[feature].fillna(0.0))
+
+    # Combine risk_score
+    risk_score = np.zeros(len(df), dtype=float)
+    for feature, weight in risk_weights.items():
+        risk_score += weight * rank_features[feature].to_numpy()
+    df["risk_score"] = risk_score
+
+    # Sort by risk from high to low
+    df = df.sort_values("risk_score", ascending=False).reset_index(drop=True)
+
+    # Cumulative share (violations and severity)
+    total_viol = df["sla_violations"].sum()
+    total_severity = df["severity_weighted_violations"].sum()
+
+    if total_viol > 0:
+        df["cum_violation_share"] = df["sla_violations"].cumsum() / total_viol
+    else:
+        df["cum_violation_share"] = 0.0
+
+    if total_severity > 0:
+        df["cum_severity_share"] = (
+            df["severity_weighted_violations"].cumsum() / total_severity
+        )
+    else:
+        df["cum_severity_share"] = 0.0
+
+    # For Lorenz / Pareto curve
+    n_sellers = len(df)
+    df["seller_rank"] = np.arange(1, n_sellers + 1)
+    df["seller_rank_share"] = df["seller_rank"] / n_sellers
+
+    return df
