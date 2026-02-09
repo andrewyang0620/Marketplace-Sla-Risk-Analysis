@@ -289,3 +289,45 @@ def rank_sellers_by_sla_risk(
     df["seller_rank_share"] = df["seller_rank"] / n_sellers
 
     return df
+
+
+def assign_risk_tier_by_quantile(
+    ranked: pd.DataFrame,
+    *,
+    high_q: float = 0.9,
+    medium_q: float = 0.6,
+    min_orders_high: int = 50,
+    min_orders_medium: int = 20,
+    col: str = "risk_score",
+) -> pd.DataFrame:
+    """Assign risk tier based on quantiles of the specified column (default: risk_score).
+
+    Sellers with very few delivered orders may be assigned to lower tiers even if their risk_score is high, due to higher uncertainty.
+
+    Args:
+        ranked: DataFrame output from rank_sellers_by_sla_risk, must contain 'delivered_orders' and the specified col.
+        high_q: Quantile threshold for High Risk tier.
+        medium_q: Quantile threshold for Medium Risk tier.
+        min_orders_high: Minimum delivered orders to be considered for High Risk tier.
+        min_orders_medium: Minimum delivered orders to be considered for Medium Risk tier.
+        col: Column name to use for quantile calculation (default: 'risk_score').
+
+    Returns:
+        DataFrame with an additional 'risk_tier' column indicating 'High', 'Medium', or 'Low' risk.
+    """
+    df = ranked.copy()
+    if df.empty:
+        df["risk_tier"] = []
+        return df
+    
+    high_thr = df[col].quantile(high_q)  # 90th percentile as threshold for High Risk
+    med_thr = df[col].quantile(medium_q)  # 60th percentile as threshold for Medium Risk
+    
+    conditions = [
+        (df[col] >= high_thr) & (df["delivered_orders"] >= min_orders_high),
+        (df[col] >= med_thr) & (df[col] < high_thr) & (df["delivered_orders"] >= min_orders_medium),
+    ]
+    choices = ["high", "medium"]
+    
+    df["risk_tier"] = np.select(conditions, choices, default="low")
+    return df
