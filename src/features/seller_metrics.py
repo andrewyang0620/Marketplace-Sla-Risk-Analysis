@@ -369,3 +369,45 @@ def compute_seller_metrics_by_period(
         return pd.DataFrame()
     
     return pd.concat(results, ignore_index=True)
+
+def compute_risk_stability(
+    period_metrics: pd.DataFrame,
+    *,
+    top_k: int = 50,
+    col: str = "risk_score",
+) -> pd.DataFrame:
+    """Calculate Jaccard similarity for top_k high-risk sellers between consecutive periods
+    to evaluate the temporal stability of risk rankings.
+
+    Expected input format:
+      - Should have already run rank_sellers_by_sla_risk within each period to obtain risk_score
+      - Columns must include at least: seller_id, period, risk_score
+
+    Output:
+      DataFrame with columns: period_t, period_t1, jaccard_top_k
+    """
+    if period_metrics.empty:
+        return pd.DataFrame(columns=["period_t", "period_t1", "jaccard_top_k"])
+
+    df = period_metrics.copy()
+    df["period"] = df["period"].astype(str)
+    periods = sorted(df["period"].unique())
+
+    rows = []
+    for p0, p1 in zip(periods[:-1], periods[1:]):
+        df0 = df[df["period"] == p0].sort_values(col, ascending=False).head(top_k)
+        df1 = df[df["period"] == p1].sort_values(col, ascending=False).head(top_k)
+
+        set0 = set(df0["seller_id"])
+        set1 = set(df1["seller_id"])
+
+        if not set0 and not set1:
+            jaccard = np.nan
+        else:
+            inter = len(set0 & set1)
+            union = len(set0 | set1)
+            jaccard = inter / union if union > 0 else np.nan
+
+        rows.append({"period_t": p0, "period_t1": p1, "jaccard_top_k": jaccard})
+
+    return pd.DataFrame(rows)
