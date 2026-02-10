@@ -331,3 +331,41 @@ def assign_risk_tier_by_quantile(
     
     df["risk_tier"] = np.select(conditions, choices, default="low")
     return df
+
+
+def compute_seller_metrics_by_period(
+    orders_sellers: pd.DataFrame,
+    *,
+    gmv_col: Optional[str] = None,
+    severe_weight: float = 2.0,
+    freq: str = "M",
+) -> pd.DataFrame:
+    """Compute seller metrics by period for trend analysis.
+    This function groups the orders_sellers data by the specified time frequency (e.g., monthly) and computes seller SLA metrics for each period. The output DataFrame contains seller-level metrics for each time period, allowing for trend analysis and monitoring of SLA performance over time.
+    Args:
+    orders_sellers: DataFrame containing orders and sellers data with required columns.
+    gmv_col: Optional column name for Gross Merchandise Value, currently not used in calculations but validated for future use.
+    severe_weight: Weight factor for severe violations when calculating severity_weighted_violations.
+    freq: Time frequency for grouping periods (e.g., 'D' for daily, 'W' for weekly, 'M' for monthly).
+    """
+    df = orders_sellers.copy()
+    validate_orders_sellers(df, gmv_col=gmv_col)
+    
+    df["period"] = df["order_purchase_timestamp"].dt.to_period(freq)
+    results = []
+    
+    for period, sub in df.groupby("period"):
+        metrics = compute_seller_sla_metrics(
+            sub,
+            gmv_col=gmv_col,
+            severe_weight=severe_weight,
+            as_of = sub["order_purchase_timestamp"].max(),  # end of the period
+            lookback_days=None,  # use all data up to the end of the period
+        )
+        metrics["period"] = period
+        results.append(metrics)
+        
+    if not results:
+        return pd.DataFrame()
+    
+    return pd.concat(results, ignore_index=True)
