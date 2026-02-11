@@ -207,3 +207,207 @@ def compute_seller_sla_metrics(
 
     metrics = metrics.reset_index().rename(columns={"index": "seller_id"})
     return metrics
+
+def rank_sellers_by_sla_risk(
+    seller_metrics: pd.DataFrame,
+    *,
+    min_delivered_orders: int = 10,
+    risk_weights: Optional[Dict[str, float]] = None,
+) -> pd.DataFrame:
+    """Rank sellers by SLA risk and calculate risk_score based on SLA metrics.
+
+    Current version uses only SLA dimensions:
+      - violation_rate
+      - severity_weighted_violations
+
+    Steps:
+      1. Filter out sellers with delivered_orders < min_delivered_orders (small sample noise).
+      2. Calculate quantile rank (0~1) for each feature, treating missing values as 0.
+      3. Compute risk_score as weighted sum based on risk_weights.
+      4. Sort by risk_score in descending order.
+      5. Calculate:
+         - cum_violation_share
+         - cum_severity_share
+         - seller_rank, seller_rank_share
+    """
+    df = seller_metrics.copy()
+
+    df = df[df["delivered_orders"] >= min_delivered_orders].copy()
+    if df.empty:
+        logger.warning("No sellers left after applying min_delivered_orders filter.")
+        df["risk_score"] = []
+        return df
+
+    # Default weights - pure SLA perspective
+    if risk_weights is None:
+        risk_weights = {
+            "violation_rate": 0.5,
+            "severity_weighted_violations": 0.5,
+        }
+
+    def pct_rank(series: pd.Series) -> pd.Series:
+        """Percentile rank, returns 0 if all values are missing."""
+        if series.notna().sum() == 0:
+            return pd.Series(0.0, index=series.index)
+        return series.rank(pct=True)
+
+    # Build rank features
+    rank_features = {}
+    for feature in risk_weights.keys():
+        if feature not in df.columns:
+            raise ValueError(f"Feature '{feature}' not found in seller_metrics.")
+        rank_features[feature] = pct_rank(df[feature].fillna(0.0))
+
+    # Combine risk_score
+    risk_score = np.zeros(len(df), dtype=float)
+    for feature, weight in risk_weights.items():
+        risk_score += weight * rank_features[feature].to_numpy()
+    df["risk_score"] = risk_score
+
+    # Sort by risk from high to low
+    df = df.sort_values("risk_score", ascending=False).reset_index(drop=True)
+
+    # Cumulative share (violations and severity)
+    total_viol = df["sla_violations"].sum()
+    total_severity = df["severity_weighted_violations"].sum()
+
+    if total_viol > 0:
+        df["cum_violation_share"] = df["sla_violations"].cumsum() / total_viol
+    else:
+        df["cum_violation_share"] = 0.0
+
+    if total_severity > 0:
+        df["cum_severity_share"] = (
+            df["severity_weighted_violations"].cumsum() / total_severity
+        )
+    else:
+        df["cum_severity_share"] = 0.0
+
+    # For Lorenz / Pareto curve
+    n_sellers = len(df)
+    df["seller_rank"] = np.arange(1, n_sellers + 1)
+    df["seller_rank_share"] = df["seller_rank"] / n_sellers
+
+    return df
+
+
+def assign_risk_tier_by_quantile(
+    ranked: pd.DataFrame,
+    *,
+    high_q: float = 0.9,
+    medium_q: float = 0.6,
+    min_orders_high: int = 50,
+    min_orders_medium: int = 20,
+    col: str = "risk_score",
+) -> pd.DataFrame:
+    """Assign risk tier based on quantiles of the specified column (default: risk_score).
+
+    Sellers with very few delivered orders may be assigned to lower tiers even if their risk_score is high, due to higher uncertainty.
+
+    Args:
+        ranked: DataFrame output from rank_sellers_by_sla_risk, must contain 'delivered_orders' and the specified col.
+        high_q: Quantile threshold for High Risk tier.
+        medium_q: Quantile threshold for Medium Risk tier.
+        min_orders_high: Minimum delivered orders to be considered for High Risk tier.
+        min_orders_medium: Minimum delivered orders to be considered for Medium Risk tier.
+        col: Column name to use for quantile calculation (default: 'risk_score').
+
+    Returns:
+        DataFrame with an additional 'risk_tier' column indicating 'High', 'Medium', or 'Low' risk.
+    """
+    df = ranked.copy()
+    if df.empty:
+        df["risk_tier"] = []
+        return df
+    
+    high_thr = df[col].quantile(high_q)  # 90th percentile as threshold for High Risk
+    med_thr = df[col].quantile(medium_q)  # 60th percentile as threshold for Medium Risk
+    
+    conditions = [
+        (df[col] >= high_thr) & (df["delivered_orders"] >= min_orders_high),
+        (df[col] >= med_thr) & (df[col] < high_thr) & (df["delivered_orders"] >= min_orders_medium),
+    ]
+    choices = ["high", "medium"]
+    
+    df["risk_tier"] = np.select(conditions, choices, default="low")
+    return df
+
+
+def compute_seller_metrics_by_period(
+    orders_sellers: pd.DataFrame,
+    *,
+    gmv_col: Optional[str] = None,
+    severe_weight: float = 2.0,
+    freq: str = "M",
+) -> pd.DataFrame:
+    """Compute seller metrics by period for trend analysis.
+    This function groups the orders_sellers data by the specified time frequency (e.g., monthly) and computes seller SLA metrics for each period. The output DataFrame contains seller-level metrics for each time period, allowing for trend analysis and monitoring of SLA performance over time.
+    Args:
+    orders_sellers: DataFrame containing orders and sellers data with required columns.
+    gmv_col: Optional column name for Gross Merchandise Value, currently not used in calculations but validated for future use.
+    severe_weight: Weight factor for severe violations when calculating severity_weighted_violations.
+    freq: Time frequency for grouping periods (e.g., 'D' for daily, 'W' for weekly, 'M' for monthly).
+    """
+    df = orders_sellers.copy()
+    validate_orders_sellers(df, gmv_col=gmv_col)
+    
+    df["period"] = df["order_purchase_timestamp"].dt.to_period(freq)
+    results = []
+    
+    for period, sub in df.groupby("period"):
+        metrics = compute_seller_sla_metrics(
+            sub,
+            gmv_col=gmv_col,
+            severe_weight=severe_weight,
+            as_of = sub["order_purchase_timestamp"].max(),  # end of the period
+            lookback_days=None,  # use all data up to the end of the period
+        )
+        metrics["period"] = period
+        results.append(metrics)
+        
+    if not results:
+        return pd.DataFrame()
+    
+    return pd.concat(results, ignore_index=True)
+
+def compute_risk_stability(
+    period_metrics: pd.DataFrame,
+    *,
+    top_k: int = 50,
+    col: str = "risk_score",
+) -> pd.DataFrame:
+    """Calculate Jaccard similarity for top_k high-risk sellers between consecutive periods
+    to evaluate the temporal stability of risk rankings.
+
+    Expected input format:
+      - Should have already run rank_sellers_by_sla_risk within each period to obtain risk_score
+      - Columns must include at least: seller_id, period, risk_score
+
+    Output:
+      DataFrame with columns: period_t, period_t1, jaccard_top_k
+    """
+    if period_metrics.empty:
+        return pd.DataFrame(columns=["period_t", "period_t1", "jaccard_top_k"])
+
+    df = period_metrics.copy()
+    df["period"] = df["period"].astype(str)
+    periods = sorted(df["period"].unique())
+
+    rows = []
+    for p0, p1 in zip(periods[:-1], periods[1:]):
+        df0 = df[df["period"] == p0].sort_values(col, ascending=False).head(top_k)
+        df1 = df[df["period"] == p1].sort_values(col, ascending=False).head(top_k)
+
+        set0 = set(df0["seller_id"])
+        set1 = set(df1["seller_id"])
+
+        if not set0 and not set1:
+            jaccard = np.nan
+        else:
+            inter = len(set0 & set1)
+            union = len(set0 | set1)
+            jaccard = inter / union if union > 0 else np.nan
+
+        rows.append({"period_t": p0, "period_t1": p1, "jaccard_top_k": jaccard})
+
+    return pd.DataFrame(rows)
