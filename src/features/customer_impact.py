@@ -119,3 +119,60 @@ def build_order_customer_panel(
     df["repeat_within_horizon"] = df["days_to_next_order"].between(0, max_horizon_days)
     
     return df
+
+
+def summarize_cx_by_sla_flag(
+    panel: pd.DataFrame,
+    *,
+    sla_flag_col: str = "is_sla_violation",
+) -> pd.DataFrame:
+    """
+    Level 1: Descriptive comparison between on-time and delayed orders.
+
+    Groups orders by an SLA flag (e.g., is_sla_violation or is_severe_violation)
+    and computes key customer experience metrics.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Order-level panel built by `build_order_customer_panel`.
+        Must contain:
+          - order_id
+          - review_score
+          - is_low_rating
+          - is_very_low_rating
+          - is_canceled
+          - repeat_within_horizon
+          - sla_flag_col (e.g., is_sla_violation)
+    sla_flag_col : str, optional
+        Column name indicating SLA violation flag. Default is "is_sla_violation".
+
+    Returns
+    -------
+    pd.DataFrame
+        Summary table with one row per SLA flag value and columns:
+          - sla_flag
+          - orders
+          - mean_review
+          - low_rating_rate
+          - very_low_rating_rate
+          - cancel_rate
+          - repeat_rate
+    """
+    if sla_flag_col not in panel.columns:
+        raise ValueError(f"Column '{sla_flag_col}' not found in panel.")
+
+    df = panel.copy()
+    df["sla_flag"] = df[sla_flag_col].astype(int)
+
+    grp = df.groupby("sla_flag")
+    summary = grp.agg(
+        orders=("order_id", "nunique"),
+        mean_review=("review_score", "mean"),
+        low_rating_rate=("is_low_rating", "mean"),
+        very_low_rating_rate=("is_very_low_rating", "mean"),
+        cancel_rate=("is_canceled", "mean"),
+        repeat_rate=("repeat_within_horizon", "mean"),
+    ).reset_index()
+
+    return summary
