@@ -176,3 +176,52 @@ def summarize_cx_by_sla_flag(
     ).reset_index()
 
     return summary
+
+
+def summarize_cx_by_delay_bucket(panel: pd.DataFrame) -> pd.DataFrame:
+    """
+    Level 4: Dose-response analysis of delay severity vs customer experience.
+
+    Groups orders by delay_bucket and computes:
+      - number of orders
+      - mean review_score
+      - low rating rate
+      - cancellation rate
+      - repeat purchase rate
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Order-level panel built by `build_order_customer_panel`.
+        Must contain:
+          - order_id
+          - delay_bucket
+          - review_score
+          - is_low_rating
+          - is_canceled
+          - repeat_within_horizon
+
+    Returns
+    -------
+    pd.DataFrame
+        Summary table with one row per delay_bucket and columns:
+          - delay_bucket
+          - orders
+          - mean_review
+          - low_rating_rate
+          - cancel_rate
+          - repeat_rate
+    """
+    if "delay_bucket" not in panel.columns:
+        raise ValueError("Panel must contain 'delay_bucket' column.")
+
+    grp = panel.groupby("delay_bucket")
+    summary = grp.agg(
+        orders=("order_id", "nunique"),
+        mean_review=("review_score", "mean"),
+        low_rating_rate=("is_low_rating", "mean"),
+        cancel_rate=("is_canceled", "mean"),
+        repeat_rate=("repeat_within_horizon", "mean"),
+    ).reset_index()
+
+    return summary
