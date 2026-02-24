@@ -20,23 +20,24 @@ def select_primary_seller(items: pd.DataFrame, primary_item_id: int = 1) -> pd.D
     Raises:
         KeyError: If required columns are missing from the items DataFrame.
     """
-    required_cols = ["order_item_id", "order_id", "seller_id"]
+    required_cols = ["order_item_id", "order_id", "seller_id", "product_id"]
     for col in required_cols:
         if col not in items.columns:
             raise KeyError(f"Column '{col}' not found in items DataFrame")
     
     items_main = items.loc[
-        items["order_item_id"] == primary_item_id,["order_id", "seller_id"],
+        items["order_item_id"] == primary_item_id,["order_id", "seller_id", "product_id"],
     ].copy()
     
     return items_main
 
-def build_orders_sellers(orders: pd.DataFrame, items: pd.DataFrame, primary_item_id: int = 1, cols_keep: list[str] | None = None) -> pd.DataFrame:
+def build_orders_sellers(orders: pd.DataFrame, items: pd.DataFrame, products: pd.DataFrame | None = None, primary_item_id: int = 1, cols_keep: list[str] | None = None) -> pd.DataFrame:
     """Build a DataFrame that links orders with their primary sellers.
     
     Args:
         orders: DataFrame containing order information with 'order_id' column.
         items: DataFrame containing order item information.
+        products: DataFrame containing product information. Defaults to None.
         primary_item_id: The order_item_id to consider as primary. Defaults to 1.
         cols_keep: List of columns to keep in the final DataFrame. If None, keep all columns. Defaults to None.
         
@@ -56,6 +57,16 @@ def build_orders_sellers(orders: pd.DataFrame, items: pd.DataFrame, primary_item
         on="order_id",
         how="left",
     )
+    
+    if products is not None:
+        cat_col = (
+            "product_category_name_english"
+            if "product_category_name_english" in products.columns
+            else "product_category_name"
+        )
+        prod_cols = ["product_id", cat_col]
+        prod_cols = [c for c in prod_cols if c in products.columns]
+        df = df.merge(products[prod_cols].drop_duplicates("product_id"), on="product_id", how="left")
     
     if "has_time_anomaly" not in df.columns:
         df["has_time_anomaly"] = False

@@ -1,6 +1,10 @@
 # /src/data/load_raw.py
 import pandas as pd
-from src.config import DATA_RAW
+
+try:
+    from config import DATA_RAW
+except ImportError:
+    from src.config import DATA_RAW
 
 # load `orders` table
 def load_orders():
