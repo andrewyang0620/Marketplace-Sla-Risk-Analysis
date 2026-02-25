@@ -392,3 +392,165 @@ def compute_stratified_deltas(
         pivot["repeat_rate_violation"] - pivot["repeat_rate_on_time"]
     )
     return pivot
+
+
+def within_seller_before_after_summary(
+    panel: pd.DataFrame,
+    *,
+    severe_flag_col: str = "is_severe_violation",
+    window_days: int = 90,
+    min_orders_per_side: int = 5,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Level 3: Within-seller analysis around the first severe SLA event.
+
+    For each seller that has at least one severe SLA violation:
+      - Find the timestamp of the first severe violation.
+      - Define a pre-window: [first_severe_ts - window_days, first_severe_ts)
+      - Define a post-window: [first_severe_ts, first_severe_ts + window_days]
+      - Summarize CX metrics before and after the event.
+
+    This helps test whether customer experience deteriorates after a seller
+    encounters a major SLA failure.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Order-level panel that must contain:
+          - seller_id
+          - order_purchase_timestamp
+          - severe_flag_col (bool/0-1)
+          - review_score
+          - is_low_rating
+          - is_canceled
+          - repeat_within_horizon
+    severe_flag_col : str, optional
+        Column indicating severe SLA violations. Default "is_severe_violation".
+    window_days : int, optional
+        Number of days before and after the first severe event to consider.
+    min_orders_per_side : int, optional
+        Minimum number of orders required in both pre and post windows for a
+        seller to be included in the per-seller summary.
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, pd.DataFrame]
+        (per_seller_summary, overall_summary)
+
+        per_seller_summary:
+          - seller_id
+          - orders_before / orders_after
+          - mean_review_before / mean_review_after
+          - low_rating_rate_before / low_rating_rate_after
+          - cancel_rate_before / cancel_rate_after
+          - repeat_rate_before / repeat_rate_after
+
+        overall_summary:
+          A single-row DataFrame aggregating across all qualifying sellers:
+          - orders_before / orders_after
+          - mean_review_before / mean_review_after
+          - low_rating_rate_before / low_rating_rate_after
+          - cancel_rate_before / cancel_rate_after
+          - repeat_rate_before / repeat_rate_after
+    """
+    required_cols = [
+        "seller_id",
+        "order_purchase_timestamp",
+        severe_flag_col,
+        "order_id",
+        "review_score",
+        "is_low_rating",
+        "is_canceled",
+        "repeat_within_horizon",
+    ]
+    missing = [c for c in required_cols if c not in panel.columns]
+    if missing:
+        raise ValueError(f"Panel is missing required columns: {missing}")
+
+    df = panel.copy()
+    if not np.issubdtype(df["order_purchase_timestamp"].dtype, np.datetime64):
+        raise ValueError("order_purchase_timestamp must be datetime64[ns].")
+
+    # Identify first severe event per seller
+    severe_df = df[df[severe_flag_col].astype(bool)].copy()
+    if severe_df.empty:
+        logger.warning("No severe SLA violations found; within-seller analysis not applicable.")
+        empty = pd.DataFrame()
+        return empty, empty
+
+    first_severe = (
+        severe_df.groupby("seller_id")["order_purchase_timestamp"]
+        .min()
+        .reset_index(name="first_severe_ts")
+    )
+
+    df = df.merge(first_severe, on="seller_id", how="inner")
+
+    df["days_from_first_severe"] = (
+        df["order_purchase_timestamp"] - df["first_severe_ts"]
+    ).dt.days
+
+    # Helper for summarizing a subset
+    def _summarize(sub: pd.DataFrame, suffix: str) -> pd.DataFrame:
+        return sub.groupby("seller_id").agg(
+            **{
+                f"orders_{suffix}": ("order_id", "nunique"),
+                f"mean_review_{suffix}": ("review_score", "mean"),
+                f"low_rating_rate_{suffix}": ("is_low_rating", "mean"),
+                f"cancel_rate_{suffix}": ("is_canceled", "mean"),
+                f"repeat_rate_{suffix}": ("repeat_within_horizon", "mean"),
+            }
+        )
+
+    # Pre- and post-windows
+    before = df[df["days_from_first_severe"].between(-window_days, -1)]
+    after = df[df["days_from_first_severe"].between(0, window_days)]
+
+    if before.empty or after.empty:
+        logger.warning(
+            "Insufficient data in pre or post window for within-seller analysis."
+        )
+        empty = pd.DataFrame()
+        return empty, empty
+
+    before_s = _summarize(before, "before")
+    after_s = _summarize(after, "after")
+
+    # Align and keep only sellers with sufficient orders on both sides
+    per_seller = before_s.join(after_s, how="inner")
+
+    per_seller = per_seller[
+        (per_seller["orders_before"] >= min_orders_per_side)
+        & (per_seller["orders_after"] >= min_orders_per_side)
+    ].reset_index()
+
+    if per_seller.empty:
+        logger.warning(
+            "No sellers with sufficient orders on both sides for within-seller analysis."
+        )
+        empty = pd.DataFrame()
+        return empty, empty
+
+    # Overall summary (weighted by number of orders)
+    overall_before = before[before["seller_id"].isin(per_seller["seller_id"])]
+    overall_after = after[after["seller_id"].isin(per_seller["seller_id"])]
+
+    def _overall(sub: pd.DataFrame, suffix: str) -> dict:
+        return {
+            f"orders_{suffix}": sub["order_id"].nunique(),
+            f"mean_review_{suffix}": sub["review_score"].mean(),
+            f"low_rating_rate_{suffix}": sub["is_low_rating"].mean(),
+            f"cancel_rate_{suffix}": sub["is_canceled"].mean(),
+            f"repeat_rate_{suffix}": sub["repeat_within_horizon"].mean(),
+        }
+
+    overall_summary = pd.DataFrame(
+        [
+            {
+                **_overall(overall_before, "before"),
+                **_overall(overall_after, "after"),
+            }
+        ]
+    )
+
+    return per_seller, overall_summary
