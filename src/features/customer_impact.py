@@ -225,3 +225,170 @@ def summarize_cx_by_delay_bucket(panel: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
 
     return summary
+
+
+def summarize_cx_by_strata_and_sla(
+    panel: pd.DataFrame,
+    *,
+    strata_cols: List[str],
+    sla_flag_col: str = "is_sla_violation",
+    min_orders_per_group: int = 30,
+) -> pd.DataFrame:
+    """
+    Level 2: Stratified comparison to approximate matched analysis.
+
+    For each stratum defined by `strata_cols`,
+    compare CX metrics between on-time and delayed orders.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Order-level panel with SLA and CX fields.
+    strata_cols : list of str
+        Columns that define strata (e.g., ["product_category_name", "customer_state"]).
+    sla_flag_col : str, optional
+        SLA flag column to split on. Default "is_sla_violation".
+    min_orders_per_group : int, optional
+        Minimum number of orders per (stratum, sla_flag) group. Strata with
+        less orders will be dropped to avoid noisy comparisons.
+
+    Returns
+    -------
+    pd.DataFrame
+        Stratified summary with columns:
+          - each `strata_cols`
+          - sla_flag (0 = on-time, 1 = violation)
+          - orders
+          - mean_review
+          - low_rating_rate
+          - cancel_rate
+          - repeat_rate
+        Strata where either sla_flag group has < min_orders_per_group
+        are removed.
+    """
+    missing = [c for c in strata_cols if c not in panel.columns]
+    if missing:
+        raise ValueError(f"Strata columns missing from panel: {missing}")
+    if sla_flag_col not in panel.columns:
+        raise ValueError(f"SLA flag column '{sla_flag_col}' not found in panel.")
+
+    df = panel.copy()
+    df["sla_flag"] = df[sla_flag_col].astype(int)
+
+    group_cols = strata_cols + ["sla_flag"]
+    grouped = df.groupby(group_cols).agg(
+        orders=("order_id", "nunique"),
+        mean_review=("review_score", "mean"),
+        low_rating_rate=("is_low_rating", "mean"),
+        cancel_rate=("is_canceled", "mean"),
+        repeat_rate=("repeat_within_horizon", "mean"),
+    ).reset_index()
+
+    # Ensure both SLA groups within each stratum have enough orders.
+    # For each stratum: (1) both sla_flag=0 and sla_flag=1 must exist,
+    # and (2) the orders count for each side must meet the threshold.
+    strata_only_cols = strata_cols
+    both_sides = (
+        grouped.groupby(strata_only_cols)["sla_flag"]
+        .nunique()
+        .rename("n_sides")
+    )
+    min_orders_per_side = (
+        grouped.groupby(strata_only_cols)["orders"]
+        .min()
+        .rename("min_orders")
+    )
+    strata_filter = (
+        pd.concat([both_sides, min_orders_per_side], axis=1)
+        .reset_index()
+    )
+    strata_filter["keep_stratum"] = (
+        (strata_filter["n_sides"] == 2)
+        & (strata_filter["min_orders"] >= min_orders_per_group)
+    )
+    grouped = grouped.merge(
+        strata_filter[strata_only_cols + ["keep_stratum"]],
+        on=strata_only_cols,
+        how="left",
+    )
+    grouped = grouped[grouped["keep_stratum"]].drop(columns=["keep_stratum"])
+
+    return grouped
+
+
+def compute_stratified_deltas(
+    panel: pd.DataFrame,
+    strata_col: str,
+    *,
+    sla_flag_col: str = "is_sla_violation",
+    min_orders: int = 30,
+) -> Optional[pd.DataFrame]:
+    """
+    Level 2: Compute within-stratum CX deltas (violation – on-time) for a
+    single stratum column.
+
+    Calls `summarize_cx_by_strata_and_sla` internally, then pivots the result
+    to wide format and computes delta columns.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Order-level panel built by `build_order_customer_panel`.
+    strata_col : str
+        A single column name to stratify by (e.g., "customer_state").
+    sla_flag_col : str, optional
+        SLA flag column. Default "is_sla_violation".
+    min_orders : int, optional
+        Minimum orders per (stratum, sla_flag) group. Default 30.
+
+    Returns
+    -------
+    pd.DataFrame or None
+        Wide table with columns:
+          - strata_col
+          - low_rating_rate_on_time / low_rating_rate_violation
+          - repeat_rate_on_time / repeat_rate_violation
+          - delta_low_rating_rate
+          - delta_repeat_rate
+        Returns None if no strata pass the min_orders filter.
+    """
+    stratified = summarize_cx_by_strata_and_sla(
+        panel,
+        strata_cols=[strata_col],
+        sla_flag_col=sla_flag_col,
+        min_orders_per_group=min_orders,
+    )
+    if stratified.empty:
+        logger.warning(
+            "compute_stratified_deltas: no strata passed min_orders=%d filter for column '%s'",
+            min_orders,
+            strata_col,
+        )
+        return None
+
+    pivot = stratified.pivot_table(
+        index=[strata_col],
+        columns="sla_flag",
+        values=["low_rating_rate", "repeat_rate"],
+    )
+    pivot.columns = [
+        f"{metric}_{'violation' if flag == 1 else 'on_time'}"
+        for metric, flag in pivot.columns
+    ]
+    pivot = pivot.reset_index()
+
+    if "low_rating_rate_violation" not in pivot.columns or "low_rating_rate_on_time" not in pivot.columns:
+        logger.warning(
+            "compute_stratified_deltas: pivot missing one SLA side for column '%s': %s",
+            strata_col,
+            pivot.columns.tolist(),
+        )
+        return None
+
+    pivot["delta_low_rating_rate"] = (
+        pivot["low_rating_rate_violation"] - pivot["low_rating_rate_on_time"]
+    )
+    pivot["delta_repeat_rate"] = (
+        pivot["repeat_rate_violation"] - pivot["repeat_rate_on_time"]
+    )
+    return pivot
