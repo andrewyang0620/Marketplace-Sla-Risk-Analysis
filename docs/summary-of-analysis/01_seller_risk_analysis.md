@@ -26,6 +26,7 @@
   - **Low risk** (460 sellers, 78.2%): 
     - Mean violation rate: **3.6%**
     - Contribute **32.9%** of violations (baseline risk)
+  - **Risk × GMV**: High-risk tier concentrates both SLA violations and disproportionate GMV at risk — sellers in the top-right quadrant (high violation rate + high violation GMV) are the highest-priority intervention targets.
 
 - **Temporal stability analysis**
   - Monthly cohort analysis across **20 consecutive month-pairs** (2016-10 to 2018-08).
@@ -41,6 +42,7 @@
     - High-risk tier: Immediate reactive intervention (proactive capacity audit, priority support).
     - Medium-risk tier: Monitoring with early warning triggers.
     - Low-risk tier: Standard operational procedures.
+  - **GMV-driven prioritisation**: Violation rate alone is insufficient — a seller with moderate violation rate but large order volume may represent more GMV at risk than a small high-rate seller. The Risk × GMV matrix enables dual-axis prioritisation.
 
 - **Artifacts saved for downstream analysis**
   - `seller_sla_metrics_180d.parquet`: Seller-level SLA metrics (2,021 sellers).
@@ -48,6 +50,5 @@
   - `seller_sla_risk_stability.parquet`: Monthly Top-50 Jaccard similarity (20 month-pairs).
 
 **Next steps**:
-1. **Customer impact & CX validation**: Link seller risk tiers to review scores, NPS proxies, and repeat purchase behavior.
-2. **Economic impact & guardrails (GMV at risk)**: Integrate order-level GMV to identify “high-risk + high-GMV” sellers and quantify GMV at risk under different intervention scenarios.
-3. **Intervention ROI simulation**: Simulate the cost-benefit of reactive vs. preventive interventions under GMV and CX guardrails.
+1. **Early warning model (H3)**: Build rolling features (30/60/90-day violation rate trend, order volume growth) to predict which sellers will enter the high-risk tier in the next 30 days — motivated by the low temporal stability finding (mean Jaccard ~0.25).
+2. **Intervention ROI simulation**: Simulate the cost-benefit of reactive vs. preventive interventions under GMV and CX guardrails.
