@@ -1,5 +1,4 @@
-
-## Seller Risk Analysis – Summary
+# Seller Risk Analysis – Summary
 
 - **Analysis scope & data quality**
   - Total orders: **99,441**, spanning from **2016-09-04** to **2018-10-17** (25 months).
