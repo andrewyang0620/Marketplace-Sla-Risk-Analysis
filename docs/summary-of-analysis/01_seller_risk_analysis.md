@@ -1,5 +1,4 @@
-
-## Seller Risk Analysis – Summary
+# Seller Risk Analysis – Summary
 
 - **Analysis scope & data quality**
   - Total orders: **99,441**, spanning from **2016-09-04** to **2018-10-17** (25 months).
@@ -19,19 +18,22 @@
     - Mean violation rate: **10.2%**
     - Minimum delivered orders: 50
     - Contribute **25.4%** of total violations despite small population
+    - GMV at risk: **BRL 35,454** (**9.14%** of tier GMV)
   - **Medium risk** (104 sellers, 17.7%): 
     - Mean violation rate: **5.7%**
     - Minimum delivered orders: 20
     - Contribute **41.7%** of violations
+    - GMV at risk: **BRL 63,239** (**4.86%** of tier GMV)
   - **Low risk** (460 sellers, 78.2%): 
     - Mean violation rate: **3.6%**
     - Contribute **32.9%** of violations (baseline risk)
+    - GMV at risk: **BRL 64,396** (**3.51%** of tier GMV)
   - **Risk × GMV**: High-risk tier concentrates both SLA violations and disproportionate GMV at risk — sellers in the top-right quadrant (high violation rate + high violation GMV) are the highest-priority intervention targets.
 
 - **Temporal stability analysis**
   - Monthly cohort analysis across **20 consecutive month-pairs** (2016-10 to 2018-08).
-  - **Stability is modest** observed: Mean Jaccard similarity = **~0.25** for Top-50 high-risk sellers.
-  - Only **25%** of high-risk sellers remain in the list month-over-month.
+  - **Stability is modest** observed: Mean Jaccard similarity = **0.245** for Top-50 high-risk sellers.
+  - Only **~24.5%** of high-risk sellers remain in the list month-over-month.
   - **Peak stability**: 0.45 (Jun-Jul 2017), indicating brief periods of consistent violators.
   - **Implication**: High-risk seller identity is **transient**, not persistent behavior.
 
@@ -50,5 +52,5 @@
   - `seller_sla_risk_stability.parquet`: Monthly Top-50 Jaccard similarity (20 month-pairs).
 
 **Next steps**:
-1. **Early warning model (H3)**: Build rolling features (30/60/90-day violation rate trend, order volume growth) to predict which sellers will enter the high-risk tier in the next 30 days — motivated by the low temporal stability finding (mean Jaccard ~0.25).
+1. **Early warning model (H3)**: Build rolling features (30/60/90-day violation rate trend, order volume growth) to predict which sellers will enter the high-risk tier in the next 30 days — motivated by the low temporal stability finding (mean Jaccard = 0.245).
 2. **Intervention ROI simulation**: Simulate the cost-benefit of reactive vs. preventive interventions under GMV and CX guardrails.

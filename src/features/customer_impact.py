@@ -215,7 +215,7 @@ def summarize_cx_by_delay_bucket(panel: pd.DataFrame) -> pd.DataFrame:
     if "delay_bucket" not in panel.columns:
         raise ValueError("Panel must contain 'delay_bucket' column.")
 
-    grp = panel.groupby("delay_bucket")
+    grp = panel.groupby("delay_bucket", observed=True)
     summary = grp.agg(
         orders=("order_id", "nunique"),
         mean_review=("review_score", "mean"),
