@@ -14,10 +14,19 @@
     `delay_days = delivered_customer_date - estimated_delivery_date`, computed only for orders with both timestamps present.
   - Among delivered orders, **6.57%** violate the promised delivery date (`delay_days > 0`).
   - **2.88%** of delivered orders experience **severe delay** (`delay_days > 7`), which will be used as “high customer harm” events in downstream analysis and simulations.
+  - Extreme outliers (delay > 60 days): **79 orders (0.08%)** — retained but documented; do not materially affect aggregate SLA statistics.
+  - `has_time_anomaly=True` flags orders where `delivered_date < purchased_date` (0 cases found); these would be excluded from SLA calculations if present.
+
 
 - **Customer experience signal availability**
   - Among delivered orders, **99.33%** have a valid review score.
+  - Review score distribution is J-shaped (1-star and 5-star dominate). Non-parametric tests (Mann-Whitney U) are preferred over mean comparisons in downstream CX analysis.
   - This provides a sufficiently large sample to study the relationship between SLA reliability, review scores, and repeat behaviour.
+
+- **GMV coverage**
+  - Order-level GMV is aggregated from the payments table and merged into `orders_sellers`.
+  - Total platform GMV: **BRL 16,008,872**.
+  - GMV at risk (orders with any SLA violation): **BRL 1,150,910 (7.19% of total GMV)**.
 
 - **Data quality & joins**
   - `seller_id` is missing for only **0.78%** of orders, and these will be excluded from seller-level risk analysis.
@@ -27,4 +36,5 @@
 These checks confirm that the Olist dataset is structurally sound and suitable for:
 1. Seller-level risk analysis,  
 2. Customer impact validation, and  
-3. ROI-oriented intervention simulation in subsequent notebooks.
+3. GMV-at-risk quantification, and
+4. ROI-oriented intervention simulation in subsequent notebooks.

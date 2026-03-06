@@ -120,8 +120,6 @@ def compute_seller_sla_metrics(
     """
     Use orders_sellers DataFrame to compute seller-level SLA metrics over a specified time window.
 
-    gmv_col: keep for future use (not used currently)
-
     Output fields (core):
       - seller_id
       - period_start, period_end      : Time window boundaries (for record and audit)
@@ -200,6 +198,30 @@ def compute_seller_sla_metrics(
     metrics["severity_weighted_violations"] = (
         metrics["sla_violations"] + severe_weight * metrics["severe_violations"]
     )
+
+    # GMV metrics (only computed when gmv_col is provided)
+    if gmv_col is not None and gmv_col in df_win.columns:
+        metrics["total_gmv"] = (
+            df_win.groupby("seller_id")[gmv_col]
+            .sum()
+            .reindex(metrics.index, fill_value=0)
+        )
+        if len(df_delivered) > 0:
+            violation_gmv = (
+                df_delivered[df_delivered["is_sla_violation"] == True]
+                .groupby("seller_id")[gmv_col]
+                .sum()
+            )
+            metrics["violation_gmv"] = violation_gmv.reindex(metrics.index, fill_value=0)
+        else:
+            metrics["violation_gmv"] = 0.0
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            metrics["violation_gmv_rate"] = np.where(
+                metrics["total_gmv"] > 0,
+                metrics["violation_gmv"] / metrics["total_gmv"],
+                np.nan,
+            )
 
     # time window info
     metrics["period_start"] = start
