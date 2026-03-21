@@ -88,6 +88,8 @@ def build_seller_daily_sla(
         "is_severe_violation",
         "order_gmv",
     ]
+    
+    # check missing cols
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(
@@ -97,10 +99,11 @@ def build_seller_daily_sla(
     if delivered_only:
         df = df[df["order_status"] == "delivered"].copy()
 
+    # check timestamp dtype
     if not np.issubdtype(df["order_purchase_timestamp"].dtype, np.datetime64):
         raise ValueError("order_purchase_timestamp must be datetime64[ns].")
 
-    # Define event date as purchase date (consistent with 01/02 notebooks)
+    # Define event date as purchase date
     df["date"] = df["order_purchase_timestamp"].dt.floor("D")
 
     # GMV-related columns: ensure no NaN to avoid weird sums
