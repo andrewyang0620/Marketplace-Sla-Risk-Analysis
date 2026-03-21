@@ -271,3 +271,147 @@ def build_rolling_seller_features(
         df = df[df["seller_tenure_days"] >= min_history_days].copy()
 
     return df
+
+
+def _label_future_severe_for_seller(
+    sub: pd.DataFrame,
+    horizons: Sequence[int],
+    min_severe_orders: int,
+) -> pd.DataFrame:
+    """
+    Helper function to compute future severe-event labels for a single seller.
+
+    For each row (date), and for each horizon H in `horizons`, this function
+    computes:
+      - future_severe_count_{H}d:
+          Number of severe violations in the open interval (date, date + H].
+      - future_severe_gmv_{H}d:
+          GMV of severe violations in the same interval.
+      - label_future_severe_{H}d:
+          Binary label = 1 if future_severe_count_{H}d >= min_severe_orders.
+
+    Parameters
+    ----------
+    sub : pd.DataFrame
+        Daily panel for a single seller, must contain:
+          - date
+          - severe_violations
+          - severe_violation_gmv
+    horizons : sequence of int
+        List of horizons (in calendar days) at which to compute labels.
+    min_severe_orders : int
+        Minimum severe violations within the horizon to consider as a
+        "future severe event".
+
+    Returns
+    -------
+    pd.DataFrame
+        Same rows as `sub` with additional columns for each horizon.
+    """
+    sub = sub.sort_values("date").copy()
+    if not np.issubdtype(sub["date"].dtype, np.datetime64):
+        raise ValueError("date column must be datetime64[ns].")
+
+    for h in horizons:
+        future_count_col = f"future_severe_count_{h}d"
+        future_gmv_col = f"future_severe_gmv_{h}d"
+        label_col = f"label_future_severe_{h}d"
+
+        # Cumulative sums of severe violations and their GMV up to each date
+        sub["cum_severe"] = sub["severe_violations"].cumsum()
+        sub["cum_severe_gmv"] = sub["severe_violation_gmv"].cumsum()
+
+        left = sub[["date", "cum_severe", "cum_severe_gmv"]].rename(
+            columns={
+                "cum_severe": "cum_now",
+                "cum_severe_gmv": "cum_now_gmv",
+            }
+        )
+        left["future_date"] = left["date"] + pd.Timedelta(days=h)
+
+        right = sub[["date", "cum_severe", "cum_severe_gmv"]].rename(
+            columns={
+                "cum_severe": "cum_future",
+                "cum_severe_gmv": "cum_future_gmv",
+            }
+        )
+
+        merged = pd.merge_asof(
+            left.sort_values("future_date"),
+            right.sort_values("date"),
+            left_on="future_date",
+            right_on="date",
+            direction="backward",
+        )
+
+        # If there is no future row (e.g., very late in time), cum_future* will be NaN
+        merged["cum_future"] = merged["cum_future"].fillna(merged["cum_now"])
+        merged["cum_future_gmv"] = merged["cum_future_gmv"].fillna(
+            merged["cum_now_gmv"]
+        )
+
+        future_counts = merged["cum_future"] - merged["cum_now"]
+        future_gmv = merged["cum_future_gmv"] - merged["cum_now_gmv"]
+
+        sub[future_count_col] = future_counts.values
+        sub[future_gmv_col] = future_gmv.values
+        sub[label_col] = (sub[future_count_col] >= min_severe_orders).astype(int)
+
+        # Remove temporary cumulative columns before next horizon
+        sub = sub.drop(columns=["cum_severe", "cum_severe_gmv"])
+
+    return sub
+
+
+def label_future_severe_events(
+    daily_df: pd.DataFrame,
+    horizons: Sequence[int] = (7, 14, 21),
+    min_severe_orders: int = 1,
+) -> pd.DataFrame:
+    """
+    Add future severe-event labels (counts + GMV) for multiple horizons.
+
+    For each seller-date row and each horizon H in `horizons`, this function
+    computes:
+      - future_severe_count_{H}d:
+          Number of severe violations in the open interval (date, date + H].
+      - future_severe_gmv_{H}d:
+          GMV of severe violations in the same interval.
+      - label_future_severe_{H}d:
+          Binary label = 1 if future_severe_count_{H}d >= min_severe_orders.
+
+    Parameters
+    ----------
+    daily_df : pd.DataFrame
+        Daily seller-level panel with columns:
+          - seller_id
+          - date
+          - severe_violations
+          - severe_violation_gmv
+    horizons : sequence of int, default (7, 14, 21)
+        List of horizons (in calendar days) at which to compute labels.
+    min_severe_orders : int, default 1
+        Minimum number of severe violations in the future window to be
+        considered a positive event.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same rows as `daily_df`, with additional columns for each horizon.
+    """
+    df = daily_df.copy()
+    for col in ["seller_id", "date", "severe_violations", "severe_violation_gmv"]:
+        if col not in df.columns:
+            raise ValueError(f"daily_df must contain '{col}' column.")
+
+    frames = []
+    for seller_id, sub in df.groupby("seller_id", sort=False):
+        labeled = _label_future_severe_for_seller(
+            sub=sub,
+            horizons=horizons,
+            min_severe_orders=min_severe_orders,
+        )
+        frames.append(labeled)
+
+    out = pd.concat(frames, ignore_index=True)
+    return out
