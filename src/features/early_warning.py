@@ -165,3 +165,106 @@ def build_seller_daily_sla(
     )
 
     return daily
+
+
+def build_rolling_seller_features(
+    daily_df: pd.DataFrame,
+    windows: Sequence[int] = (7, 14, 30),
+    min_history_days: int = 7,
+) -> pd.DataFrame:
+    """
+    Compute rolling-window features over daily SLA + GMV statistics.
+
+    Windows are expressed in number of activity days per seller.
+
+    Parameters
+    ----------
+    daily_df : pd.DataFrame
+        Output of `build_seller_daily_sla`, must contain:
+          - seller_id
+          - date
+          - delivered_orders
+          - sla_violations
+          - severe_violations
+          - avg_delay_days
+          - delivered_gmv
+          - violation_gmv
+          - severe_violation_gmv
+          - seller_tenure_days
+          - lifetime_violation_rate
+          - lifetime_severe_violation_rate
+          - lifetime_violation_gmv_share
+          - lifetime_severe_violation_gmv_share
+    windows : sequence of int, optional
+        Rolling window sizes (in activity days) to compute features for.
+        Typical choices: [7, 14, 30].
+    min_history_days : int, optional
+        Minimum seller tenure (in days since first order) required for a row to be kept in the resulting feature table.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same rows as `daily_df` (after min_history_days filtering), with additional columns for each window size, for example for window=14:
+          - delivered_14d
+          - sla_violations_14d
+          - severe_violations_14d
+          - delivered_gmv_14d
+          - violation_gmv_14d
+          - severe_violation_gmv_14d
+          - violation_rate_14d
+          - severe_violation_rate_14d
+          - violation_gmv_share_14d
+          - severe_violation_gmv_share_14d
+          - avg_delay_14d
+    """
+    df = daily_df.copy()
+    df = df.sort_values(["seller_id", "date"])
+
+    grp = df.groupby("seller_id", group_keys=False)
+
+    for w in windows:
+        roll = grp.rolling(window=w, min_periods=1)
+
+        # Volume and counts
+        df[f"delivered_{w}d"] = (
+            roll["delivered_orders"].sum().reset_index(level=0, drop=True)
+        )
+        df[f"sla_violations_{w}d"] = (
+            roll["sla_violations"].sum().reset_index(level=0, drop=True)
+        )
+        df[f"severe_violations_{w}d"] = (
+            roll["severe_violations"].sum().reset_index(level=0, drop=True)
+        )
+
+        # GMV-side volumes
+        df[f"delivered_gmv_{w}d"] = (
+            roll["delivered_gmv"].sum().reset_index(level=0, drop=True)
+        )
+        df[f"violation_gmv_{w}d"] = (
+            roll["violation_gmv"].sum().reset_index(level=0, drop=True)
+        )
+        df[f"severe_violation_gmv_{w}d"] = (
+            roll["severe_violation_gmv"].sum().reset_index(level=0, drop=True)
+        )
+
+        # Rolling rates
+        denom_orders = df[f"delivered_{w}d"].replace({0: np.nan})
+        denom_gmv = df[f"delivered_gmv_{w}d"].replace({0: np.nan})
+
+        df[f"violation_rate_{w}d"] = df[f"sla_violations_{w}d"] / denom_orders
+        df[f"severe_violation_rate_{w}d"] = df[f"severe_violations_{w}d"] / denom_orders
+        df[f"violation_gmv_share_{w}d"] = df[f"violation_gmv_{w}d"] / denom_gmv
+        df[f"severe_violation_gmv_share_{w}d"] = (
+            df[f"severe_violation_gmv_{w}d"] / denom_gmv
+        )
+
+        # Approximate rolling average delay
+        df[f"avg_delay_{w}d"] = (
+            roll["avg_delay_days"].mean().reset_index(level=0, drop=True)
+        )
+
+    # Drop rows with insufficient history if requested
+    if "seller_tenure_days" in df.columns and min_history_days is not None:
+        df = df[df["seller_tenure_days"] >= min_history_days].copy()
+
+    return df
