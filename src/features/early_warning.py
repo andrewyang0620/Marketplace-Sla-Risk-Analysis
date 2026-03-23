@@ -266,6 +266,20 @@ def build_rolling_seller_features(
             roll["avg_delay_days"].mean().reset_index(level=0, drop=True)
         )
 
+    # Trend features: short-term (7d) vs long-term (30d) deterioration signals.
+    # A positive value means the recent window is worse than the long-run average.
+    if 7 in windows and 30 in windows:
+        df["violation_rate_trend_7v30"] = (
+            df["violation_rate_7d"] - df["violation_rate_30d"]
+        )
+        df["severe_rate_trend_7v30"] = (
+            df["severe_violation_rate_7d"] - df["severe_violation_rate_30d"]
+        )
+        df["gmv_share_trend_7v30"] = (
+            df["violation_gmv_share_7d"] - df["violation_gmv_share_30d"]
+        )
+        df["delay_trend_7v30"] = df["avg_delay_7d"] - df["avg_delay_30d"]
+
     # Drop rows with insufficient history if requested
     if "seller_tenure_days" in df.columns and min_history_days is not None:
         df = df[df["seller_tenure_days"] >= min_history_days].copy()
