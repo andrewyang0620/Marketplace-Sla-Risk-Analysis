@@ -25,14 +25,8 @@ def evaluate_topk_with_gmv(
 
     Returns
     -------
-    pd.DataFrame
-        One row per K-fraction with columns:
-          - k_frac
-          - k
-          - precision
-          - event_recall
-          - gmv_recall
-          - coverage
+    dict
+        Flat dict with keys like 'precision_at_1%', 'event_recall_at_5%', 'gmv_recall_at_10%', 'coverage_at_1%', etc.
     """
     y_true = np.asarray(y_true).astype(int)
     scores = np.asarray(scores)
@@ -46,30 +40,16 @@ def evaluate_topk_with_gmv(
     total_events = y_true.sum()
     total_gmv = future_gmv.sum()
 
-    results = []
+    result = {}
     for k_frac in k_fracs:
         k = max(1, int(n * k_frac))
-        y_top = y_sorted[:k]
-        gmv_top = gmv_sorted[:k]
+        tp = y_sorted[:k].sum()
+        gmv_captured = gmv_sorted[:k].sum()
 
-        tp = y_top.sum()
-        precision = tp / k
-        event_recall = tp / total_events if total_events > 0 else np.nan
+        k_pct = f"{k_frac:.0%}"
+        result[f"precision_at_{k_pct}"] = tp / k
+        result[f"event_recall_at_{k_pct}"] = tp / total_events if total_events > 0 else np.nan
+        result[f"gmv_recall_at_{k_pct}"] = gmv_captured / total_gmv if total_gmv > 0 else np.nan
+        result[f"coverage_at_{k_pct}"] = k / n
 
-        gmv_captured = gmv_top.sum()
-        gmv_recall = gmv_captured / total_gmv if total_gmv > 0 else np.nan
-
-        coverage = k / n
-
-        results.append(
-            {
-                "k_frac": k_frac,
-                "k": k,
-                "precision": precision,
-                "event_recall": event_recall,
-                "gmv_recall": gmv_recall,
-                "coverage": coverage,
-            }
-        )
-
-    return pd.DataFrame(results)
+    return result

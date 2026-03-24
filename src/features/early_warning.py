@@ -223,48 +223,33 @@ def build_rolling_seller_features(
     df = daily_df.copy()
     df = df.sort_values(["seller_id", "date"])
 
-    grp = df.groupby("seller_id", group_keys=False)
+    result_frames = []
 
-    for w in windows:
-        roll = grp.rolling(window=w, min_periods=1)
+    for _, sub in df.groupby("seller_id", sort=False):
+        sub = sub.set_index("date").sort_index()
 
-        # Volume and counts
-        df[f"delivered_{w}d"] = (
-            roll["delivered_orders"].sum().reset_index(level=0, drop=True)
-        )
-        df[f"sla_violations_{w}d"] = (
-            roll["sla_violations"].sum().reset_index(level=0, drop=True)
-        )
-        df[f"severe_violations_{w}d"] = (
-            roll["severe_violations"].sum().reset_index(level=0, drop=True)
-        )
+        for w in windows:
+            roll = sub.rolling(f"{w}D", min_periods=1)
 
-        # GMV-side volumes
-        df[f"delivered_gmv_{w}d"] = (
-            roll["delivered_gmv"].sum().reset_index(level=0, drop=True)
-        )
-        df[f"violation_gmv_{w}d"] = (
-            roll["violation_gmv"].sum().reset_index(level=0, drop=True)
-        )
-        df[f"severe_violation_gmv_{w}d"] = (
-            roll["severe_violation_gmv"].sum().reset_index(level=0, drop=True)
-        )
+            sub[f"delivered_{w}d"] = roll["delivered_orders"].sum()
+            sub[f"sla_violations_{w}d"] = roll["sla_violations"].sum()
+            sub[f"severe_violations_{w}d"] = roll["severe_violations"].sum()
+            sub[f"delivered_gmv_{w}d"] = roll["delivered_gmv"].sum()
+            sub[f"violation_gmv_{w}d"] = roll["violation_gmv"].sum()
+            sub[f"severe_violation_gmv_{w}d"] = roll["severe_violation_gmv"].sum()
 
-        # Rolling rates
-        denom_orders = df[f"delivered_{w}d"].replace({0: np.nan})
-        denom_gmv = df[f"delivered_gmv_{w}d"].replace({0: np.nan})
+            denom_orders = sub[f"delivered_{w}d"].replace({0: np.nan})
+            denom_gmv = sub[f"delivered_gmv_{w}d"].replace({0: np.nan})
 
-        df[f"violation_rate_{w}d"] = df[f"sla_violations_{w}d"] / denom_orders
-        df[f"severe_violation_rate_{w}d"] = df[f"severe_violations_{w}d"] / denom_orders
-        df[f"violation_gmv_share_{w}d"] = df[f"violation_gmv_{w}d"] / denom_gmv
-        df[f"severe_violation_gmv_share_{w}d"] = (
-            df[f"severe_violation_gmv_{w}d"] / denom_gmv
-        )
+            sub[f"violation_rate_{w}d"] = sub[f"sla_violations_{w}d"] / denom_orders
+            sub[f"severe_violation_rate_{w}d"] = sub[f"severe_violations_{w}d"] / denom_orders
+            sub[f"violation_gmv_share_{w}d"] = sub[f"violation_gmv_{w}d"] / denom_gmv
+            sub[f"severe_violation_gmv_share_{w}d"] = sub[f"severe_violation_gmv_{w}d"] / denom_gmv
+            sub[f"avg_delay_{w}d"] = roll["avg_delay_days"].mean()
 
-        # Approximate rolling average delay
-        df[f"avg_delay_{w}d"] = (
-            roll["avg_delay_days"].mean().reset_index(level=0, drop=True)
-        )
+        result_frames.append(sub.reset_index())
+
+    df = pd.concat(result_frames, ignore_index=True).sort_values(["seller_id", "date"])
 
     # Trend features: short-term (7d) vs long-term (30d) deterioration signals.
     # A positive value means the recent window is worse than the long-run average.
