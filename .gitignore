@@ -25,14 +25,17 @@ venv/
 *.nbconvert.ipynb
 
 # =========================
-# Data files (IMPORTANT)
+# Data files
 # =========================
-data/raw/
-data/interim/
-data/external/
+data/raw/*
+data/processed/*
+data/interim/*
+data/external/*
 
-# Keep sample or schema files
 !data/README.md
+!data/raw/README.md
+!data/interim/README.md
+!data/external/README.md
 !data/sample/
 !data/sample/**
 
@@ -51,7 +54,7 @@ logs/
 *.log
 
 # =========================
-# Model artifacts (if any)
+# Model artifacts
 # =========================
 models/
 *.pkl
